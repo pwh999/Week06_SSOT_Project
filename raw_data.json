@@ -1,0 +1,29 @@
+{
+  "dataset": "2026_Campus_Sleep_Intervention",
+  "owner": "潘炜昊 (5715126019)",
+  "course": "人机协同程序设计 · 第6周实践",
+  "design": "双组受控对照实验，14 天，随机均分，睡前干预变量为唯一自变量",
+  "unit": {
+    "avg_sleep_sec": "秒（正文统一折算为分钟，保留 1 位小数）",
+    "rate": "百分比（分子 / n，保留 1 位小数）"
+  },
+  "groups": [
+    {
+      "id": "G_Control",
+      "mode": "睡前自由刷短视频",
+      "n": 40,
+      "pass_count": 17,
+      "avg_sleep_sec": 2760,
+      "morning_fatigue_cases": 29
+    },
+    {
+      "id": "G_Exp",
+      "mode": "灰阶屏幕+离床隔离",
+      "n": 40,
+      "pass_count": 34,
+      "avg_sleep_sec": 840,
+      "morning_fatigue_cases": 3
+    }
+  ],
+  "notes": "本台账为报告全部定量指标的唯一起源；未在本文件中出现的统计量（p 值、置信区间、外部文献数据）一律不得出现在 report.md 中。"
+}

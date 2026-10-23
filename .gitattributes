@@ -1,0 +1,9 @@
+# 统一换行，避免 Windows 下 CRLF 污染母稿与代码
+* text=auto eol=lf
+
+# 二进制文件禁止任何换行转换（否则 PDF 会被破坏）
+*.pdf binary
+*.docx binary
+*.png binary
+*.jpg binary
+*.zip binary
