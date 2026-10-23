@@ -1,6 +1,6 @@
-#set page(paper: "a4", margin: (top: 2.5cm, bottom: 2.5cm, left: 2.6cm, right: 2.6cm))
+#set page(paper: "a4", margin: (top: 2.5cm, bottom: 2.5cm, left: 2.6cm, right: 2.6cm), numbering: (i, n) => text(size: 8.5pt, fill: rgb("#64748b"))[第 #i 页 / 共 #n 页])
 #set text(font: ("PingFang SC", "Songti SC", "STSong", "Noto Serif CJK SC", "SimSun"), size: 10.5pt, lang: "zh")
-#set par(justify: true, leading: 0.85em, first-line-indent: 2em)
+#set par(justify: true, leading: 0.72em, first-line-indent: 2em)
 #set heading(numbering: none)
 
 #align(center)[
@@ -35,7 +35,8 @@
 
 #set par(first-line-indent: 0pt)
 #align(center)[
-  #table(columns: 6, stroke: (x, y) => if y == 0 { (top: 1.5pt + black, bottom: 1pt + black) } else { (bottom: 0.5pt + gray) }, inset: 6pt,
+  #set text(size: 8.5pt)
+  #table(columns: (19fr, 14fr, 14fr, 17fr, 22fr, 15fr), stroke: (x, y) => if y == 0 { (top: 1.5pt + black, bottom: 1pt + black) } else { (bottom: 0.5pt + gray) }, inset: (x: 5pt, y: 4pt),
     [*评测组别*],
     [*睡前干预模式*],
     [*样本量 ($N$)*],

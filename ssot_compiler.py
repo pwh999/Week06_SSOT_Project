@@ -652,9 +652,11 @@ def md_inline_to_typst(text: str) -> str:
 def build_report_typst_and_pdf(doc: dict, out_typ_path: Path, out_pdf_path: Path, out_a4_html_path: Path):
     abstract_clean = re.sub(r"^\*\*摘要\*\*[：:]\s*", "", doc["abstract"])
     typ_lines = [
-        '#set page(paper: "a4", margin: (top: 2.5cm, bottom: 2.5cm, left: 2.6cm, right: 2.6cm))',
+        # 页脚页码交给排版引擎自己算，避免兜底引擎那种「手工数页」的脆弱实现
+        '#set page(paper: "a4", margin: (top: 2.5cm, bottom: 2.5cm, left: 2.6cm, right: 2.6cm),'
+        ' numbering: (i, n) => text(size: 8.5pt, fill: rgb("#64748b"))[第 #i 页 / 共 #n 页])',
         '#set text(font: ("PingFang SC", "Songti SC", "STSong", "Noto Serif CJK SC", "SimSun"), size: 10.5pt, lang: "zh")',
-        "#set par(justify: true, leading: 0.85em, first-line-indent: 2em)",
+        "#set par(justify: true, leading: 0.72em, first-line-indent: 2em)",
         "#set heading(numbering: none)",
         "",
         "#align(center)[",
@@ -692,10 +694,16 @@ def build_report_typst_and_pdf(doc: dict, out_typ_path: Path, out_pdf_path: Path
             for tbl in sec["tables"]:
                 if len(tbl) >= 2:
                     cols = len(tbl[0])
+                    # 按各列最长单元格的字数分配列宽权重（fr 归一化），否则长表头会把邻列挤成一字一行
+                    weights = [
+                        max(14, min(32, max(len(str(r[c_i])) for r in tbl))) for c_i in range(cols)
+                    ]
+                    col_spec = "(" + ", ".join(f"{w}fr" for w in weights) + ")"
                     typ_lines.append("#set par(first-line-indent: 0pt)")
                     typ_lines.append("#align(center)[")
+                    typ_lines.append("  #set text(size: 8.5pt)")
                     typ_lines.append(
-                        f"  #table(columns: {cols}, stroke: (x, y) => if y == 0 {{ (top: 1.5pt + black, bottom: 1pt + black) }} else {{ (bottom: 0.5pt + gray) }}, inset: 6pt,"
+                        f"  #table(columns: {col_spec}, stroke: (x, y) => if y == 0 {{ (top: 1.5pt + black, bottom: 1pt + black) }} else {{ (bottom: 0.5pt + gray) }}, inset: (x: 5pt, y: 4pt),"
                     )
                     for r_idx, row in enumerate(tbl):
                         for cell in row:
@@ -780,20 +788,61 @@ def build_report_typst_and_pdf(doc: dict, out_typ_path: Path, out_pdf_path: Path
 </html>"""
     out_a4_html_path.write_text(a4_html_doc, encoding="utf-8")
 
-    # 优先尝试调用本地 typst 编译 PDF
-    typst_bin = shutil.which("typst")
-    if typst_bin:
-        res = subprocess.run(
-            [typst_bin, "compile", str(out_typ_path), str(out_pdf_path)],
-            capture_output=True,
-            text=True,
-        )
-        if res.returncode == 0 and out_pdf_path.exists():
-            return "typst CLI 引擎"
+    # 优先调用 Typst 编译 PDF：先找 CLI，再试 `pip install typst` 装出来的 Python 绑定
+    engine = _compile_pdf_with_typst(out_typ_path, out_pdf_path)
+    if engine:
+        return engine
 
     # 备选：使用内置 CJK 原生 PDF 兜底生成器（确保任何无外部依赖的裸 Python 环境均可输出合法 PDF）
     generate_fallback_cjk_pdf(doc, out_pdf_path)
     return "Python 内置学术 PDF 引擎 (零外部依赖兜底)"
+
+
+def _compile_pdf_with_typst(typ_path: Path, pdf_path: Path):
+    """尝试用 Typst 把 .typ 编译成 PDF；成功返回引擎名，不可用/失败返回 None。
+
+    两条通路，缺一不可：
+      1. Typst 官方 CLI（独立安装的二进制，`shutil.which("typst")` 可见）；
+      2. `pip install typst` 安装的 Python 绑定 —— 这个 wheel **只注册 `import typst`，
+         不生成 typst.exe**，所以 `shutil.which("typst")` 永远返回 None，必须显式 import。
+         这正是"明明按老师说的装了 typst、PDF 却仍然走兜底引擎"的根因。
+    """
+    # 可复现构建：Typst 默认把「编译那一刻」写进 PDF 的 CreationDate/ID，
+    # 导致同一份母稿两次编译的散列不同，SSOT 的「回滚后逐字节还原」就无法自证。
+    # 固定为 SOURCE_DATE_EPOCH（可复现构建的通行约定），未设置时用报告定稿日。
+    epoch = os.environ.get("SOURCE_DATE_EPOCH", "").strip()
+    stamp = int(epoch) if epoch.isdigit() else 1792684800  # 2026-10-23 00:00:00 +08:00
+
+    typst_bin = shutil.which("typst")
+    if typst_bin:
+        env = dict(os.environ, SOURCE_DATE_EPOCH=str(stamp))
+        res = subprocess.run(
+            [typst_bin, "compile", str(typ_path), str(pdf_path)],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        if res.returncode == 0 and pdf_path.exists():
+            return "Typst CLI 引擎"
+        print("   ⚠ [warn] Typst CLI 编译失败，改试 Python 绑定：" + (res.stderr or "").strip()[:200])
+
+    try:
+        import typst as typst_py  # type: ignore
+    except ImportError:
+        return None
+
+    try:
+        pdf_bytes, warnings = typst_py.compile_with_warnings(str(typ_path), timestamp=stamp)
+        pdf_path.write_bytes(pdf_bytes)
+        if pdf_path.exists() and pdf_path.stat().st_size > 0:
+            # 字体链是跨平台的，本机没装的那几款会报 unknown font family，属预期噪音
+            real_warns = [w for w in warnings if "unknown font family" not in str(w)]
+            if real_warns:
+                print(f"   ⚠ [warn] Typst 编译告警 {len(real_warns)} 条：" + str(real_warns[0])[:200])
+            return "Typst Python 绑定引擎 (pip install typst)"
+    except Exception as exc:
+        print("   ⚠ [warn] Typst Python 绑定编译失败：" + str(exc).strip()[:200])
+    return None
 
 
 def _pdf_utf16be_hex(text: str) -> str:

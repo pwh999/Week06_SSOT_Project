@@ -39,7 +39,19 @@ python ssot_compiler.py
 | Gate 2 视觉预算 | 幻灯片每页要点 ≤ 6 条、标题字数不溢出，自动切分为 16:9 页面 |
 | Gate 3 双端构建 | 同时产出 `slides.html` 与 `report.pdf`（优先 Typst，缺省时启用零依赖 Python PDF 引擎） |
 
-编译器不依赖任何第三方库；若系统装有 `typst` 会自动切换为矢量排版引擎。
+## 让 PDF 走真正的排版引擎
+
+```bash
+pip install typst
+```
+
+装好后重新运行 `python ssot_compiler.py`，Gate 3 会打印 `(驱动: Typst Python 绑定引擎)`，产物从 ~15 KB 的兜底 PDF 变成 ~192 KB 的矢量排版件（字体子集真正嵌入，任何阅读器都不会显示方块）。
+
+> 注意：`pip install typst` 装的是 **Python 绑定**，**不会生成 `typst.exe`**，所以只能用 `import typst` 调用，`which typst` 是找不到的。编译器同时支持这两条通路；都没有时自动降级为内置零依赖引擎（能打开、能读，但排版与字体嵌入都是简化版）。
+
+**编译器本体只用标准库**（`argparse`/`hashlib`/`re`/`shutil`/`subprocess`…），可选依赖仅 `typst`：装了就走矢量排版引擎，没装则自动降级，两者产物都在 `dist/` 下。
+
+> 可复现构建：PDF 的时间戳固定为 `SOURCE_DATE_EPOCH`（默认取报告定稿日 2026-10-23），因为 Typst 默认把"编译那一刻"写进 PDF 元数据，会让同一份母稿每次编译出不同字节——那样"回滚后逐字节还原"的验证就失去意义了。
 
 ## 核心数据（源自 `raw_data.json`）
 
